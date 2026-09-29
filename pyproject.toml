@@ -1,0 +1,30 @@
+[project]
+name = "claude-agentic-loop"
+version = "0.1.0"
+description = "Um agentic loop com o Claude que sempre para de forma segura (safe termination)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk>=0.1.0",
+    "tzdata>=2026.4",
+]
+
+[project.scripts]
+agent = "agent_loop.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_loop"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
