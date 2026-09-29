@@ -67,6 +67,15 @@ async def test_opcoes_de_seguranca(monkeypatch):
     assert options.max_turns == 4
     assert options.permission_mode == "dontAsk"
     assert all(t.startswith("mcp__lab__") for t in options.allowed_tools)
+    assert options.strict_mcp_config is True  # ignora servidores MCP externos
+    assert options.skills == []
+    assert list(options.mcp_servers) == ["lab"]
+
+
+def test_total_tokens_inclui_cache():
+    usage = {"input_tokens": 2, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 500, "output_tokens": 30}
+    assert sdk_agent.total_tokens(usage) == 1532
+    assert sdk_agent.total_tokens(None) == 0
 
 
 async def test_max_turns_vem_como_result_error(monkeypatch):

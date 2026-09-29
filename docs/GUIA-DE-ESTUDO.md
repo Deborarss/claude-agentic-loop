@@ -63,7 +63,7 @@ O arquivo `uv.lock` garante que todo mundo instale **exatamente as mesmas versõ
 uv run pytest
 ```
 
-Você deve ver algo como `48 passed`. Esses testes **não chamam o Claude** e não gastam nada (a Parte 3 explica como).
+Você deve ver algo como `49 passed`. Esses testes **não chamam o Claude** e não gastam nada (a Parte 3 explica como).
 
 > `uv run <comando>` = "rode este comando usando o ambiente virtual do projeto". Você não precisa ativar o `.venv` na mão.
 
@@ -211,7 +211,7 @@ E se o modelo **nunca** decidir parar?
 |---|---|---|
 | Quem escreve o `while` | Você | O SDK |
 | Onde ficam as guardas | No seu código | Na **configuração** (`max_turns`, hooks...) |
-| Autenticação | API key (paga por uso) | Login do Claude Code (sua assinatura) |
+| Autenticação | API key (paga por uso) | Autenticação configurada no Claude Code |
 | Para que serve aqui | **Entender** como funciona por baixo | **Rodar** de verdade |
 
 > A prova cobra os dois: entender o loop por dentro **e** saber configurar um framework.
@@ -251,7 +251,7 @@ tools.py ──► termination.py ──► raw_loop.py ──► tests/ ──�
        return str(exc), True      # ← o erro vira TEXTO para o Claude ler
    ```
    > 🎯 **Por quê?** Se a tool falhar e o programa quebrar, o agente morre. Se o erro voltar como `is_error: true`,
-   > o Claude lê "Chamado INC9999 não encontrado" e **se adapta** (você viu isso acontecer no teste real!).
+   > o Claude lê "Chamado INC9999 não encontrado" e **se adapta** (veja na prática na [seção 4.3](#43-forçar-cada-guarda-na-prática)).
 
 4. **`anthropic_tool_definitions()`**: converte para o formato da Messages API (o JSON da seção 2.2).
 
@@ -392,6 +392,14 @@ cliente falso. Isso é **injeção de dependência**, e é o que torna o loop te
    - `tools=[]`: **desliga** as tools embutidas do Claude Code (ler/escrever arquivos, shell, web). Nosso agente só pode usar as nossas 3 tools.
    - `allowed_tools=sdk_tool_names()` + `permission_mode="dontAsk"`: as nossas tools rodam sem pedir permissão; **qualquer outra é negada**.
    - `setting_sources=[]`: não carrega seu `CLAUDE.md` nem configurações pessoais, então o agente se comporta igual em qualquer máquina.
+   - `strict_mcp_config=True` + `skills=[]`: usa **só** o nosso MCP server. Sem isso, o Claude Code também carrega
+     servidores MCP configurados em outros lugares (conta, plugins, `.mcp.json`), e as definições dessas tools entram
+     no contexto de **toda** chamada.
+     > 🔍 **Por que isso importa:** num ambiente com vários servidores MCP configurados, uma pergunta simples pode
+     > consumir dezenas de vezes mais tokens só com definições de tools que o agente nem pode usar. Isso pode
+     > disparar a guarda `max_budget_usd` (`token_budget`) antes de a tarefa terminar.
+     > **Lição:** menor privilégio também é *menor contexto*. Tudo o que entra no contexto custa tokens,
+     > mesmo quando não é usado.
 
 2. **Hooks**: funções que o SDK chama em momentos específicos. `PreToolUse` roda **antes** de cada tool e pode **vetar** a chamada:
    ```python
@@ -465,7 +473,7 @@ uv run pytest -k repetida -v
 > 🧪 **Experimento:** abra `termination.py`, troque `>=` por `>` em `check_tool_call`, rode `uv run pytest` e veja quais
 > testes falham e por quê. Depois desfaça (`git checkout src/agent_loop/termination.py`).
 
-### 4.2 O agente de verdade (modo SDK, usa sua assinatura)
+### 4.2 O agente de verdade (modo SDK, usa o login do Claude Code)
 
 ```powershell
 # Pergunta simples
@@ -586,7 +594,9 @@ Domínio: **Agentic Architecture & Orchestration**. Marque o que você consegue 
 - [ ] Por que nunca confiar no input de uma tool (ex.: `eval`)
 - [ ] O que o Agent SDK oferece: loop pronto, `max_turns`, `max_budget_usd`, hooks, permissões, MCP in-process
 - [ ] Hook `PreToolUse` com `permissionDecision: "deny"` versus `continue_: False`
-- [ ] Princípio do menor privilégio: `tools=[]` + `allowed_tools` + `permission_mode="dontAsk"`
+- [ ] Princípio do menor privilégio: `tools=[]` + `strict_mcp_config` + `allowed_tools` + `permission_mode="dontAsk"`
+- [ ] Que definições de tools ocupam contexto (e custam tokens) mesmo quando não são usadas
+- [ ] O que é prompt caching e por que o uso vem em `cache_creation_input_tokens` / `cache_read_input_tokens`
 - [ ] Como testar agentes de forma determinística (cliente falso / injeção de dependência)
 - [ ] A diferença entre autenticar com API key (produto) e com login de assinatura (uso pessoal)
 
@@ -628,5 +638,7 @@ Domínio: **Agentic Architecture & Orchestration**. Marque o que você consegue 
 | `gh : The term 'gh' is not recognized` | O terminal foi aberto antes da instalação | Abra um terminal novo, ou use `& "C:\Program Files\GitHub CLI\gh.exe"` |
 | `ZoneInfoNotFoundError` / "Fuso horário desconhecido" | O Windows não traz a base de fusos | Já resolvido pela dependência `tzdata`; rode `uv sync` |
 | O caminho com espaço dá erro | `lab claude` tem espaço | Use aspas: `cd "...\lab claude\..."` |
+| `No module named 'agent_loop'` / `'claude_agent_sdk'` | Você rodou fora da pasta do projeto (o `uv` não achou o `pyproject.toml` e usou o Python global) | `cd claude-agentic-loop` e rode de novo. O prompt deve terminar em `\claude-agentic-loop>` |
+| `[parada: token_budget ...]` numa pergunta simples | O contexto está grande demais (ex.: conectores extras carregados) ou o modelo é caro | Confira se `strict_mcp_config=True` está no `sdk_agent.py`; teste com `--model haiku` |
 | `[parada: error ...]` no modo SDK | Veja a mensagem logo abaixo | Normalmente é login; rode com `-v` para mais detalhes |
 | Warning `LF will be replaced by CRLF` no commit | Diferença de fim de linha Windows/Linux | Inofensivo, pode ignorar |

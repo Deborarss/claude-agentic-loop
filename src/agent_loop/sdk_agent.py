@@ -9,7 +9,7 @@ pelo SDK. Nosso trabalho é *configurar* as guardas de parada:
 - `asyncio.timeout`         -> tempo máximo de relógio
 - `tools=[]`                -> desliga as tools embutidas (arquivos, shell, web)
 
-O SDK usa o Claude Code instalado na máquina, com o login dele (ex.: assinatura Max).
+O SDK usa o Claude Code instalado na máquina e a autenticação configurada nele.
 """
 
 from __future__ import annotations
@@ -37,6 +37,17 @@ RESULT_SUBTYPES = {
     "error_max_turns": StopReason.MAX_ITERATIONS,
     "error_max_budget_usd": StopReason.TOKEN_BUDGET,
 }
+
+
+def total_tokens(usage: dict[str, Any] | None) -> int:
+    """Soma todos os tokens de entrada e saída, incluindo os de cache.
+
+    Com prompt caching, a maior parte da entrada aparece em
+    `cache_creation_input_tokens` / `cache_read_input_tokens`, não em `input_tokens`.
+    """
+    usage = usage or {}
+    keys = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+    return sum(int(usage.get(k) or 0) for k in keys)
 
 
 def _deny(reason: StopReason, message: str) -> dict[str, Any]:
@@ -81,6 +92,10 @@ async def run_sdk_agent(
         model=model,
         tools=[],
         mcp_servers={SDK_SERVER_NAME: build_sdk_server(on_tool_result)},
+        # Só o nosso MCP server: ignora servidores MCP de outras fontes (conta,
+        # plugins, .mcp.json), cujas tools ocupariam contexto em toda chamada.
+        strict_mcp_config=True,
+        skills=[],
         allowed_tools=sdk_tool_names(),
         permission_mode="dontAsk",
         setting_sources=[],  # não carrega CLAUDE.md nem settings do usuário
@@ -120,8 +135,7 @@ async def run_sdk_agent(
     if result is None:
         return AgentResult(final_text, stop_override or StopReason.ERROR, 0, 0, transcript)
 
-    usage = result.usage or {}
-    tokens = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))
+    tokens = total_tokens(result.usage)
     reason = stop_override or RESULT_SUBTYPES.get(result.subtype, StopReason.ERROR)
     if reason is StopReason.COMPLETED and result.result:
         final_text = result.result.strip()

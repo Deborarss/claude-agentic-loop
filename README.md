@@ -82,7 +82,7 @@ uv add anthropic
 uv run agent --mode raw "Quanto é 17*23?"
 ```
 
-> **Sobre autenticação:** para estudo local, uso o Agent SDK com o login da minha assinatura do Claude.
+> **Sobre autenticação:** para estudo local, o modo SDK pode usar o login do próprio Claude Code.
 > Para um produto usado por outras pessoas, o correto é autenticar com **API key**: a Anthropic não permite
 > oferecer o login do claude.ai em produtos de terceiros.
 
@@ -100,4 +100,6 @@ falha de rede) de forma determinística e sem gastar tokens.
 - `end_turn` não é o único fim: `max_tokens` (resposta cortada) e `refusal` precisam de tratamento próprio.
 - Detectar repetição exige normalizar os argumentos (`json.dumps(..., sort_keys=True)`).
 - No Agent SDK as mesmas ideias viram configuração: `max_turns`, `max_budget_usd` e hooks `PreToolUse` que negam a chamada (`permissionDecision: "deny"`) e encerram o agente (`continue_: False`).
+- **Menor privilégio também é menor contexto:** sem `strict_mcp_config=True`, o Claude Code também carrega servidores MCP configurados fora do projeto. As definições dessas tools entram no contexto de toda chamada, mesmo sem uso, e podem multiplicar o custo de uma pergunta simples.
+- Com prompt caching, a maior parte da entrada vem em `cache_creation_input_tokens`/`cache_read_input_tokens`; contar só `input_tokens` engana.
 - Injetar o cliente (em vez de criá-lo dentro do loop) é o que torna o agente testável.
