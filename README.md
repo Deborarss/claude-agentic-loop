@@ -5,6 +5,8 @@ Um **agentic loop** com o Claude que **sempre termina de forma segura**, com um 
 Projeto 1 da minha série de estudos para a certificação **Claude Certified Architect – Foundations (CCA-F)**,
 domínio *Agentic Architecture & Orchestration*.
 
+📘 **Quer estudar este projeto passo a passo?** Veja o [Guia de estudo](docs/GUIA-DE-ESTUDO.md).
+
 ## O problema
 
 Num agente, quem decide quando parar é o **modelo**: ele pede uma tool, recebe o resultado, pede outra...
